@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Condo Parking System</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .parking-lot { 
+            display: flex; 
+            justify-content: center; 
+            gap: 10px; 
+            margin-top: 20px; 
+            padding: 20px; 
+            border-radius: 10px;
+        }
+        .parking-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px; /* Space between rows */
+        }
+        .spot { 
+            width: 100px; 
+            height: 100px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: bold; 
+            color: white; 
+            border-radius: 10px; 
+            border: 2px solid gray; /* Light grey border */
+        }
+        .available { background-color: green; }
+        .occupied { background-color: lightgray; color: black; }
+        .resident { background-color: lightblue; color: white; }
+        table { width: 50%; margin: 20px auto; border-collapse: collapse; }
+        th, td { border: 1px solid black; padding: 10px; }
+        .status-available { color: green; font-weight: bold; }
+        .status-occupied { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Smart Parking Lot System</h1>
+    
+    <!-- Resident Parking Row -->
+    <div class="parking-row" id="residentLot"></div>
+    
+    <!-- Guest Parking Row -->
+    <div class="parking-row" id="guestLot"></div>
+    
+    <h2>Guest Parking Lot Status</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Parking Spot</th>
+                <th>License Plate</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="parkingTable"></tbody>
+    </table>
+    
+    <script>
+        const blynkAuth = "M2Lf69Mam1JpeANIJh0WAxeUK_OfVLEf";
+        const residentSpots = ["P1", "P2", "P3"];
+        const guestSpots = { "G1": ["V0", "V1"], "G2": ["V3", "V4"], "G3": ["V6", "V7"], "G4": ["V9", "V10"] };
+        let lastStatuses = {};
+        let lastLicensePlates = {};
+        
+        async function fetchParkingData() {
+            let residentLotDiv = document.getElementById("residentLot");
+            let guestLotDiv = document.getElementById("guestLot");
+            let parkingTable = document.getElementById("parkingTable");
+            let updateNeeded = false;
+            
+            // Fetch data for the guest spots
+            for (let [spot, pins] of Object.entries(guestSpots)) {
+                let statusResponse = await fetch(`https://blynk.cloud/external/api/get?token=${blynkAuth}&${pins[0]}`);
+                let licenseResponse = await fetch(`https://blynk.cloud/external/api/get?token=${blynkAuth}&${pins[1]}`);
+                
+                let status = await statusResponse.text();
+                let licensePlate = await licenseResponse.text();
+                
+                let newStatus = (status.trim() === "1" || status.trim().toLowerCase() === "available") ? "available" : "occupied";
+                
+                if (lastStatuses[spot] !== newStatus || lastLicensePlates[spot] !== licensePlate) {
+                    lastStatuses[spot] = newStatus;
+                    lastLicensePlates[spot] = licensePlate;
+                    updateNeeded = true;
+                }
+            }
+            
+            // Only update if any status changed
+            if (updateNeeded) {
+                residentLotDiv.innerHTML = "";
+                guestLotDiv.innerHTML = "";
+                parkingTable.innerHTML = "";
+                
+                // Create Resident Parking Spots
+                residentSpots.forEach(spot => {
+                    let spotDiv = document.createElement("div");
+                    spotDiv.className = "spot resident";
+                    spotDiv.innerText = spot;
+                    residentLotDiv.appendChild(spotDiv);
+                });
+                
+                // Create Guest Parking Spots
+                for (let [spot, status] of Object.entries(lastStatuses)) {
+                    let spotDiv = document.createElement("div");
+                    spotDiv.className = `spot ${status === 'available' ? 'available' : 'occupied'}`;
+                    spotDiv.innerText = spot;
+                    guestLotDiv.appendChild(spotDiv);
+                    
+                    let row = `<tr>
+                        <td>${spot}</td>
+                        <td>${lastLicensePlates[spot] || 'N/A'}</td>
+                        <td class="${status === 'available' ? 'status-available' : 'status-occupied'}">${status.charAt(0).toUpperCase() + status.slice(1)}</td>
+                    </tr>`;
+                    parkingTable.innerHTML += row;
+                }
+            }
+        }
+        
+        fetchParkingData();
+        setInterval(fetchParkingData, 10000);
+    </script>
+</body>
+</html>
